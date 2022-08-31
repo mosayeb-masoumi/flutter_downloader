@@ -1,0 +1,73 @@
+name: prepare
+
+on:
+  push:
+    branches: [master]
+    # don't run this workflow on version tags
+    tags-ignore: ["v*"]
+  pull_request:
+    branches: [master]
+
+jobs:
+  main:
+    name: Flutter ${{ matrix.channel }}${{ matrix.version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: stable
+          - channel: beta
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v1
+        with:
+          channel: ${{ matrix.channel }}
+          flutter-version: ${{ matrix.version }}
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.FLUTTER_HOME }}/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pub-
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: flutter format
+        run: flutter format --set-exit-if-changed .
+
+      - name: flutter analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: flutter test
+        run: flutter test
+
+      - name: flutter pub get (example app)
+        working-directory: ./example
+        run: flutter pub get
+
+      - name: flutter format (example app)
+        working-directory: ./example
+        run: flutter format --set-exit-if-changed .
+
+      - name: flutter analyze (example app)
+        working-directory: ./example
+        run: flutter analyze --no-fatal-infos
+
+      - name: flutter test (example app)
+        working-directory: ./example
+        run: flutter test
+
+      - name: Dry run pub publish
+        # We don't want it to fail the CI, it's just to see how would `pub publish` behave.
+        run: dart pub publish --dry-run || true
